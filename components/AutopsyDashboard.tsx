@@ -9,9 +9,9 @@ import AgentSteps from './AgentSteps'
 import PostMortem from './PostMortem'
 
 const SidebarItem = ({ label, value, accent }: { label: string; value: string; accent?: boolean }) => (
-  <div className="px-4 py-2.5" style={{ borderBottom: '1px solid var(--border)' }}>
-    <p className="section-label mb-1">{label}</p>
-    <p style={{ color: accent ? 'var(--accent)' : 'var(--text)', fontSize: 12, fontWeight: 500 }}>{value}</p>
+  <div className="px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+    <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)', marginBottom: 3 }}>{label}</p>
+    <p style={{ color: accent ? 'var(--accent)' : 'var(--sidebar-fg)', fontSize: 12, fontWeight: 500 }}>{value}</p>
   </div>
 )
 
@@ -62,9 +62,14 @@ export default function AutopsyDashboard() {
   const [liveFetch, setLiveFetch] = useState<LiveFetchState>({ status: 'idle' })
   const [dataMode, setDataMode] = useState<'mock' | 'live'>('mock')
   const [contextNote, setContextNote] = useState('')
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const stepIdRef = useRef(0)
   const startTimeRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
@@ -205,7 +210,7 @@ export default function AutopsyDashboard() {
           >
             <span style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 800 }}>R</span>
           </div>
-          <span style={{ color: 'var(--white)', fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
+          <span style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
             AI Reckoning
           </span>
         </div>
@@ -226,7 +231,7 @@ export default function AutopsyDashboard() {
         {/* Incident meta */}
         <div className="flex-1 overflow-y-auto">
           <div className="px-4 pt-4 pb-2">
-            <p className="section-label">INCIDENT</p>
+            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)' }}>INCIDENT</p>
           </div>
           <SidebarItem label="Severity"  value={postMortem ? `P1 — ${postMortem.confidence}` : '—'} accent={!!postMortem} />
           <SidebarItem label="Root Cause" value={postMortem ? postMortem.rootCause.slice(0, 40) + (postMortem.rootCause.length > 40 ? '…' : '') : '—'} />
@@ -234,14 +239,15 @@ export default function AutopsyDashboard() {
           <SidebarItem label="Confidence" value={postMortem?.confidence ?? '—'} />
 
           <div className="px-4 pt-5 pb-2">
-            <p className="section-label">TIMELINE</p>
+            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)' }}>TIMELINE</p>
           </div>
           {postMortem?.timeline?.slice(0, 3).map((t, i) => (
             <SidebarItem key={i} label={t.time} value={t.event.slice(0, 36) + (t.event.length > 36 ? '…' : '')} />
           )) ?? <SidebarItem label="—" value="Run analysis to populate" />}
 
+
           <div className="px-4 pt-5 pb-2">
-            <p className="section-label">DATA SOURCE</p>
+            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)' }}>DATA SOURCE</p>
           </div>
           <div className="px-4 pb-3 flex flex-col gap-2">
             <span
@@ -294,6 +300,14 @@ export default function AutopsyDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all hover:opacity-80"
+              style={{ background: 'var(--panel-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
+              title="Toggle theme"
+            >
+              {theme === 'dark' ? '☀' : '☽'} {theme === 'dark' ? 'Light' : 'Dark'}
+            </button>
             <a
               href="https://grafana.altir.net"
               target="_blank"
@@ -371,20 +385,27 @@ export default function AutopsyDashboard() {
 
         {/* Footer — action bar */}
         <div
-          className="flex items-stretch gap-0 flex-shrink-0"
-          style={{ borderTop: '1px solid var(--border)', background: 'var(--sidebar)', minHeight: 60 }}
+          className="flex items-center gap-3 px-4 flex-shrink-0"
+          style={{ borderTop: '1px solid var(--border)', background: 'var(--panel)', height: 56 }}
         >
           {/* Left: branding */}
-          <div className="flex items-center px-6 flex-shrink-0" style={{ borderRight: '1px solid var(--border)' }}>
-            <p style={{ color: 'var(--text-muted)', fontSize: 11, whiteSpace: 'nowrap' }}>
-              Manual&nbsp;<span style={{ color: 'var(--error)', fontWeight: 600 }}>88 min</span>
-              &nbsp;→&nbsp;<span style={{ color: 'var(--accent)', fontWeight: 600 }}>~4 min</span>
-            </p>
-          </div>
+          <p style={{ color: 'var(--text-dim)', fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            Manual&nbsp;<span style={{ color: 'var(--error)', fontWeight: 700 }}>88 min</span>
+            &nbsp;→&nbsp;<span style={{ color: 'var(--accent)', fontWeight: 700 }}>~4 min</span>
+          </p>
 
           {/* Center: context input */}
-          <div className="flex items-center gap-2 px-4 flex-1" style={{ borderRight: '1px solid var(--border)' }}>
-            <span style={{ color: 'var(--text-dim)', fontSize: 11, flexShrink: 0 }}>✎</span>
+          <div
+            className="flex items-center gap-2 flex-1"
+            style={{
+              background: 'var(--panel-hover)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              padding: '0 12px',
+              height: 36,
+            }}
+          >
+            <span style={{ color: 'var(--text-dim)', fontSize: 12, flexShrink: 0 }}>✎</span>
             <textarea
               value={contextNote}
               onChange={(e) => setContextNote(e.target.value)}
@@ -395,12 +416,12 @@ export default function AutopsyDashboard() {
                 background: 'transparent',
                 color: 'var(--text)',
                 border: 'none',
-                padding: '4px 0',
+                padding: '0',
                 fontSize: 12,
                 resize: 'none',
                 outline: 'none',
                 fontFamily: 'inherit',
-                lineHeight: 1.5,
+                lineHeight: '36px',
               }}
             />
           </div>
@@ -416,8 +437,8 @@ export default function AutopsyDashboard() {
               fontSize: 14,
               cursor: isRunning ? 'not-allowed' : 'pointer',
               border: 'none',
-              borderRadius: 0,
-              minWidth: 180,
+              borderRadius: 8,
+              minWidth: 160,
               boxShadow: isRunning ? 'none' : '0 0 24px rgba(0,194,168,0.4)',
               letterSpacing: '0.01em',
             }}

@@ -10,20 +10,52 @@
   --border:       #252a38;
   --border-light: #2e3448;
   --accent:       #00c2a8;
-  --accent-bg:    rgba(0,194,168,0.08);
-  --accent-border:rgba(0,194,168,0.25);
+  --accent-bg:    rgba(0,194,168,0.10);
+  --accent-border:rgba(0,194,168,0.30);
   --error:        #f04f5e;
-  --error-bg:     rgba(240,79,94,0.08);
-  --error-border: rgba(240,79,94,0.25);
+  --error-bg:     rgba(240,79,94,0.10);
+  --error-border: rgba(240,79,94,0.30);
   --warning:      #f59e0b;
-  --warning-bg:   rgba(245,158,11,0.08);
+  --warning-bg:   rgba(245,158,11,0.10);
   --success:      #10b981;
   --blue:         #3b82f6;
-  --text:         #e2e6f0;
-  --text-muted:   #6b7585;
-  --text-dim:     #3d4455;
-  --label:        #4b5468;
-  --white:        #f8fafc;
+  --text:              #e2e6f0;
+  --text-muted:        #94a3b8;
+  --text-dim:          #5a6580;
+  --label:             #6b7890;
+  --white:             #f8fafc;
+  --sidebar-fg:        #e2e6f0;
+  --sidebar-fg-muted:  #94a3b8;
+  --sidebar-label:     #6b7890;
+}
+
+[data-theme="light"] {
+  --bg:             #eef1f7;
+  --sidebar:        #1a2035;
+  --panel:          #ffffff;
+  --panel-hover:    #f4f7fc;
+  --card:           #ffffff;
+  --border:         #d0d7e8;
+  --border-light:   #bcc6da;
+  --accent:         #00a896;
+  --accent-bg:      rgba(0,168,150,0.10);
+  --accent-border:  rgba(0,168,150,0.35);
+  --error:          #dc2626;
+  --error-bg:       rgba(220,38,38,0.08);
+  --error-border:   rgba(220,38,38,0.30);
+  --warning:        #b45309;
+  --warning-bg:     rgba(180,83,9,0.08);
+  --success:        #059669;
+  --blue:           #1d4ed8;
+  --text:           #0f172a;
+  --text-muted:     #3d4e68;
+  --text-dim:       #64748b;
+  --label:          #64748b;
+  --white:          #0f172a;
+  /* sidebar stays dark — these keep sidebar text readable */
+  --sidebar-fg:     #c8d4e8;
+  --sidebar-fg-muted: #7a8aaa;
+  --sidebar-label:  #4e607e;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -120,6 +152,9 @@ html, body {
 .btn-glow:active:not(:disabled) {
   transform: scale(0.98);
 }
+
+/* Footer context input placeholder */
+textarea::placeholder { color: var(--text-dim); opacity: 1; }
 
 /* Stat number transition */
 .stat-value {

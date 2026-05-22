@@ -9,6 +9,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 from PIL import Image, ImageDraw, ImageFont
 import io
+import os as _os
 
 # ─── Palette ─────────────────────────────────────────────────────────────────
 BG       = RGBColor(0x0A, 0x0A, 0x0A)
@@ -421,38 +422,28 @@ def error_spike_bars(slide, x0, y0, w_total, h_total):
 
 # ─── Slides ──────────────────────────────────────────────────────────────────
 
-TOTAL = 10
+TOTAL = 9
 
 # ── 1. Title ──────────────────────────────────────────────────────────────────
 s = add_slide()
 slide_bg(s)
-rect(s, 0, 0, 0.06, 7.5, fill=ACCENT)
-label(s, "RECKONING", 1.8, 4.1, 11, 2.0,
-      size=72, bold=True, color=RGBColor(0x28, 0x28, 0x36))
-
-label(s, "AI RECKONING", 1.2, 0.45, 6, 0.45, size=13, bold=True, color=ACCENT)
-label(s, "Incident Investigation,", 1.2, 1.25, 11, 0.85, size=46, bold=True, color=WHITE)
-label(s, "Automated.",              1.2, 2.1,  8,  0.85, size=46, bold=True, color=WHITE)
-label(s, "From 88 minutes of manual correlation to a 4-minute structured report.",
-      1.2, 3.15, 9.5, 0.5, size=14, color=DIM)
-rect(s, 1.2, 3.82, 4.0, 0.04, fill=ACCENT)
-label(s, "Built on a real production incident  ·  Chip1 Engineering  ·  Hackathon 2026",
-      1.2, 4.0, 10, 0.4, size=10, color=DIMMER)
-
+s.shapes.add_picture(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "title_illustration.png"),
+    Inches(0), Inches(0), Inches(13.33), Inches(7.5)
+)
 slide_number(s, 1, TOTAL)
 notes(s,
-"Last night at 8:34pm, we deployed fn-connect.\n"
-"By 8:36, errors were spiking.\n"
-"By 9pm, error volume had tripled and was still climbing.\n"
+"Yesterday at 20:34, we deployed fn-connect.\n"
+"By 20:36, errors were spiking.\n"
+"By 21:00, error volume had tripled and was still climbing.\n"
 "One engineer spent 88 minutes figuring out what happened.\n"
-"Tonight we're going to show you how to do it in 4.")
+"Today we're going to show you how to do it in 4.")
 
 
 # ── 2. The Incident (illustration slide) ──────────────────────────────────────
 s = add_slide()
 slide_bg(s)
 
-import os as _os
 _inc_img = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "prod_incident_illustration.png")
 s.shapes.add_picture(_inc_img, Inches(0), Inches(0), Inches(13.33), Inches(7.5))
 
@@ -470,96 +461,38 @@ notes(s,
 # ── 3. The Problem ────────────────────────────────────────────────────────────
 s = add_slide()
 slide_bg(s)
-top_bar(s, "The Problem",
-        "Incidents are slow to resolve — not because the answer is hard, but because the data is scattered")
+s.shapes.add_picture(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "problem_illustration.png"),
+    Inches(0), Inches(0), Inches(13.33), Inches(7.5)
+)
 slide_number(s, 3, TOTAL)
-
-pains = [
-    (RED,    "4+ tabs open",
-             "Logs. Metrics. Teams. Diff.\nEvery incident, the same manual hunt."),
-    (AMBER,  "88 minutes",
-             "For example — 88 minutes to find\na single root cause in one service."),
-    (PURPLE, "Zero documentation",
-             "Root cause lives in someone's head.\nWritten up later. Or not at all."),
-]
-for i, (col, title, body) in enumerate(pains):
-    x = 0.55 + i * 4.1
-    rect(s, x, 1.1, 3.8, 3.9, fill=RGBColor(0x0C, 0x0C, 0x18), line=col)
-    rect(s, x, 1.1, 3.8, 0.06, fill=col)
-    label(s, title, x + 0.25, 1.3,  3.3, 0.42, size=20, bold=True, color=col)
-    label(s, body,  x + 0.25, 1.95, 3.3, 1.8,  size=13, color=DIM)
-
-# Error spike bar chart below the pain cards
-section_label(s, "ERROR COUNT / 2-MIN WINDOW — fn-connect 2026-05-21", 0.55, 5.15, w=9)
-error_spike_bars(s, x0=0.55, y0=5.5, w_total=8.5, h_total=0.95)
-label(s, "Deploy 20:34", 2.5, 5.5, 1.5, 0.25, size=7.5, color=AMBER, font=FONT_MONO)
-rect(s, 2.62, 5.48, 0.01, 0.97, fill=AMBER)   # vertical marker at deploy
-
-tech_note(s, "fn-connect 2026-05-21: deploy 20:34  ·  errors 20:36  ·  root cause confirmed 20:55")
 notes(s,
-"Point to each card as you speak.\n\n"
-"4+ tabs: This is the reality every engineer faces when something breaks. "
-"Loki in one tab, Grafana in another, Teams in a third, GitLab in a fourth. No single view.\n\n"
-"88 minutes: That's not an outlier. As an example — "
-"88 minutes to trace a single root cause across logs, metrics, and code.\n\n"
-"Zero documentation: When the dust settles, the root cause lives in someone's head.\n\n"
-"The bar chart is real Loki data — 950 errors per 2 minutes at baseline, "
-"2,549 at first spike, 3,485 by 21:00 and still climbing.")
+"Point to each quadrant as you speak.\n\n"
+"Top-left: Loki logs — 12 new errors, all red, payment API timeouts, 500s, database failures.\n"
+"Top-right: Grafana — error rate climbing to 24.8%, clearly correlates with the deploy.\n"
+"Bottom-left: Teams #prod-alerts — 17 messages, customers reporting failures, P1 declared.\n"
+"Bottom-right: GitLab diff — the exact commit that just merged. That's four tabs.\n\n"
+"Centre: one engineer. 88 minutes on the clock.\n\n"
+"This is the problem. The data was always there. The bottleneck is connecting it by hand.")
 
 
 # ── 4. What We Built ──────────────────────────────────────────────────────────
 s = add_slide()
 slide_bg(s)
-top_bar(s, "What We Built",
-        "One button. Four data sources. A structured incident report in minutes.")
+s.shapes.add_picture(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "what_we_built_illustration.png"),
+    Inches(0), Inches(0), Inches(13.33), Inches(7.5)
+)
 slide_number(s, 4, TOTAL)
-
-sources = [
-    (AMBER,  "Logs",    "Production errors"),
-    (ACCENT, "Metrics", "Error rate chart"),
-    (PURPLE, "Teams",   "Channel thread"),
-    (RED,    "Diff",    "Deploy change"),
-]
-for i, (col, title, sub) in enumerate(sources):
-    x = 0.55 + i * 2.55
-    rect(s, x, 1.3, 2.25, 1.5, fill=RGBColor(0x10, 0x10, 0x1A), line=col)
-    rect(s, x, 1.3, 2.25, 0.06, fill=col)
-    label(s, title, x + 0.2, 1.5,  1.9, 0.45, size=16, bold=True, color=col)
-    label(s, sub,   x + 0.2, 1.97, 1.9, 0.4,  size=10, color=DIM)
-
-# Converging arrows → AI box
-for i in range(4):
-    ax = 0.55 + i * 2.55 + 1.1
-    label(s, "↓", ax, 2.88, 0.4, 0.4, size=14, bold=True, color=DIMMER,
-          align=PP_ALIGN.CENTER)
-
-label(s, "GPT-4o  ·  cross-source correlation  ·  causal chain reasoning",
-      2.5, 3.42, 8.3, 0.4, size=10, color=DIM, align=PP_ALIGN.CENTER)
-
-rect(s, 0.55, 4.0, 12.23, 2.65, fill=RGBColor(0x08, 0x14, 0x10), line=ACCENT)
-rect(s, 0.55, 4.0, 12.23, 0.06, fill=ACCENT)
-label(s, "STRUCTURED INCIDENT REPORT", 0.85, 4.15, 5, 0.35, size=9, bold=True, color=ACCENT)
-
-outputs = [
-    (ACCENT, "Root Cause",  "Exact file, method, line  ·  HIGH / MEDIUM / LOW confidence"),
-    (AMBER,  "Timeline",    "Every event in order — deploy, spike, alert, fix — from real data"),
-    (PURPLE, "Insights",    "Why it happened  ·  What was missed  ·  Where the gaps are"),
-    (RED,    "Actionables", "URGENT  ·  WATCH  ·  TODO — prioritised, ready to act on"),
-]
-for i, (col, title, desc) in enumerate(outputs):
-    x = 0.85 + i * 2.98
-    label(s, title, x, 4.53, 2.8, 0.38, size=12, bold=True, color=col)
-    label(s, desc,  x, 4.95, 2.8, 0.9,  size=9.5, color=DIM)
-
-tech_note(s, "No pre-baked answers · Works on any service · Author names replaced with roles — never stored · API keys never logged")
 notes(s,
-"Walk through the flow top to bottom.\n\n"
-"Four sources — logs, metrics, Teams, diff. "
-"The engineer has all four open in separate tabs. That's the 88 minutes.\n\n"
-"One button. All four sources go to GPT-4o simultaneously. "
-"Not searched — correlated. It constructs a causal chain, not a list of errors.\n\n"
-"The output is structured: root cause with exact location and confidence, "
-"a timeline built from real data, and prioritised actions.")
+"Walk through top to bottom.\n\n"
+"Top row: four sources — Logs (application, system, service), Metrics (time series, SLIs), "
+"Teams (alerts, threads, customer context), Diff (deploy diffs, config, infra).\n\n"
+"All four converge into GPT-4o — not searched in isolation, correlated simultaneously.\n\n"
+"Bottom row: four outputs — Root Cause with exact file and line, Timeline of every event, "
+"Insights into why it happened, Actions with URGENT/WATCH/TODO priority.\n\n"
+"Notice the Root Cause card already shows EntityIdMappingUtil.java:590 — "
+"that's the real answer from the real incident.")
 
 
 # ── 5. The Process ────────────────────────────────────────────────────────────
@@ -585,7 +518,6 @@ s = add_slide()
 slide_bg(s)
 
 # Full-bleed reference illustration — self-contained, no overlay needed
-import os as _os
 _sol_img = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "solution_illustration.png")
 s.shapes.add_picture(_sol_img, Inches(0), Inches(0), Inches(13.33), Inches(7.5))
 
@@ -603,175 +535,58 @@ notes(s,
 # ── 7. The Answer ─────────────────────────────────────────────────────────────
 s = add_slide()
 slide_bg(s)
-top_bar(s, "The Answer", "Same root cause an engineer spent 88 minutes finding. Found in 4.")
+s.shapes.add_picture(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "answer_illustration.png"),
+    Inches(0), Inches(0), Inches(13.33), Inches(7.5)
+)
 slide_number(s, 7, TOTAL)
-
-rect(s, 0.55, 1.25, 12.23, 1.75, fill=RGBColor(0x08, 0x14, 0x10), line=ACCENT)
-rect(s, 0.55, 1.25, 0.06, 1.75, fill=ACCENT)
-label(s, "ROOT CAUSE  ·  HIGH CONFIDENCE", 0.85, 1.38, 6, 0.3, size=8, bold=True, color=ACCENT)
-label(s, "Wrong contact returned for accounts with duplicate entries — every stock code sync fails",
-      0.85, 1.72, 11.5, 0.55, size=16, bold=True, color=WHITE)
-label(s, "fn-connect  /  EntityIdMappingUtil.java:590", 0.85, 2.35, 8, 0.35,
-      size=10, color=DIM, font=FONT_MONO)
-
-chain = [
-    (AMBER,  "Deploy\n20:34",         "release/2026.05.20"),
-    (RED,    "Wrong record\nreturned", "duplicate contacts"),
-    (RED,    "Entity ID = 0",          "getOtherId() fails"),
-    (RED,    "XCRM rejects\nevery sync","STOCK_CODE_010"),
-    (ACCENT, "Fix deployed\n20:55",    "PR #355"),
-]
-for i, (col, title, sub) in enumerate(chain):
-    x = 0.55 + i * 2.45
-    rect(s, x, 3.2, 2.2, 1.5, fill=RGBColor(0x0C, 0x0C, 0x18), line=col)
-    rect(s, x, 3.2, 2.2, 0.05, fill=col)
-    label(s, title, x + 0.15, 3.33, 1.9, 0.52, size=11, bold=True, color=col)
-    label(s, sub,   x + 0.15, 4.0,  1.9, 0.45, size=9,  color=DIM)
-    if i < len(chain) - 1:
-        label(s, "→", x + 2.2, 3.8, 0.25, 0.35, size=13, bold=True, color=DIMMER)
-
-# Visual incident timeline strip
-section_label(s, "INCIDENT TIMELINE", 0.55, 4.88)
-incident_timeline_strip(s, y=5.18)
-
-tech_note(s, "All timestamps from real log / metric / Teams data — not inferred")
 notes(s,
-"This is the answer the engineer found after 88 minutes.\n"
-"The AI found it in 4. And it's documented instantly.\n\n"
-"Point to the causal chain:\n"
-"  Deploy at 20:34 → wrong contact record returned → entity ID is zero → "
-"XCRM rejects every stock code sync → STOCK_CODE_010 on every call.\n\n"
-"That's not a guess. That's the actual sequence traced from four data sources.\n\n"
-"And the timeline at the bottom is drawn from real timestamps — not reconstructed.")
-
-
-# ── 7. Before & After ─────────────────────────────────────────────────────────
-s = add_slide()
-slide_bg(s)
-top_bar(s, "Before & After", "Same incident. Same answer.")
-slide_number(s, 8, TOTAL)
-
-rect(s, 0.35, 1.1, 5.9, 5.15, fill=RGBColor(0x12, 0x06, 0x06), line=RED)
-rect(s, 0.35, 1.1, 5.9, 0.42, fill=RED)
-label(s, "WITHOUT AI RECKONING", 0.6, 1.17, 5.4, 0.3, size=9, bold=True, color=WHITE)
-
-before = [
-    ("Open Loki. Open Grafana. Open Teams. Open GitLab.", DIM,   10, False),
-    ("Scroll 150 log lines by eye.",                      DIM,   10, False),
-    ("Correlate timestamps manually.",                    DIM,   10, False),
-    ("Form a hypothesis. Confirm with the team.",          DIM,   10, False),
-    ("",                                                  DIM,   10, False),
-    ("88 minutes to root cause.",                         RED,   18, True),
-    ("Documentation written later — if at all.",          AMBER, 10, False),
-]
-for i, (line, col, sz, b) in enumerate(before):
-    label(s, line, 0.6, 1.65 + i * 0.55, 5.4, 0.5, size=sz, bold=b, color=col)
-
-rect(s, 6.55, 1.1, 6.4, 5.15, fill=RGBColor(0x06, 0x12, 0x0E), line=ACCENT)
-rect(s, 6.55, 1.1, 6.4, 0.42, fill=ACCENT)
-label(s, "WITH AI RECKONING", 6.8, 1.17, 6.0, 0.3, size=9, bold=True, color=WHITE)
-
-after = [
-    ("Open AI Reckoning. Click Run.",              DIM,    10, False),
-    ("Watch reasoning stream live.",               DIM,    10, False),
-    ("",                                           DIM,    10, False),
-    ("~4 minutes to root cause.",                  ACCENT, 18, True),
-    ("Report generated instantly.",                ACCENT, 10, True),
-    ("",                                           DIM,    10, False),
-    ("22× faster. Zero extra effort.",             WHITE,  12, True),
-]
-for i, (line, col, sz, b) in enumerate(after):
-    label(s, line, 6.8, 1.65 + i * 0.55, 6.0, 0.5, size=sz, bold=b, color=col)
-
-# Visual speed comparison bar
-rect(s, 0.35, 6.35, 5.9, 0.22, fill=RED)
-label(s, "88 min", 0.5, 6.35, 5.0, 0.22, size=9, bold=True, color=WHITE)
-rect(s, 6.55, 6.35, 6.4 * (4/88), 0.22, fill=ACCENT)
-label(s, "~4 min", 6.7, 6.35, 1.5, 0.22, size=9, bold=True, color=RGBColor(0x0A,0x0A,0x0A))
-
-tech_note(s, "The engineer still makes the decision — the AI does the detective work")
-notes(s,
-"Without: four tabs, 150 log lines, manual timestamp correlation, 88 minutes.\n"
-"With: one button, 4 minutes, report already written.\n\n"
-"Same incident. Same root cause. Same fix.\n"
-"The only thing that changed is how long it took to find it.\n\n"
-"22 times faster. The speed bar at the bottom says it better than any words can.")
+"This is the answer. 22 times faster.\n\n"
+"Left side — Before, 88 minutes: four overlapping log files, question marks everywhere. "
+"Which service? Where did it start? What does this mean? Manual search, context switching, guesswork.\n\n"
+"Right side — After, 4 minutes: structured post-mortem, ROOT CAUSE HIGH CONFIDENCE, "
+"EntityIdMappingUtil.java:590. Causal chain: Deploy → Wrong record → Entity ID=0 → "
+"XCRM rejects → Fix deployed. Actions: Rollback to v1.24.6, Fix deployed in v1.24.8.\n\n"
+"Same incident. Same root cause. Same fix. The only difference is 84 minutes.\n\n"
+"[Pause on the 22× badge in the centre. Let it land.]")
 
 
 # ── 8. Impact ─────────────────────────────────────────────────────────────────
 s = add_slide()
 slide_bg(s)
-top_bar(s, "Impact",
-        "Every incident costs time, trust, and sleep. The investigation doesn't have to.")
-slide_number(s, 9, TOTAL)
-
-nums = [
-    (AMBER,  "88 min", "to find root cause\nin a real incident"),
-    (ACCENT, "~4 min", "with AI Reckoning\nfor the same incident"),
-    (RED,    "2.7×",  "error rate spike\nwhile investigating"),
-    (PURPLE, "14 min", "detection gap\ndeploy to first alert"),
-]
-for i, (col, num, desc) in enumerate(nums):
-    x = 0.55 + i * 3.05
-    rect(s, x, 1.25, 2.75, 2.35, fill=RGBColor(0x0C, 0x0C, 0x1A), line=col)
-    rect(s, x, 1.25, 2.75, 0.07, fill=col)
-    label(s, num,  x + 0.2, 1.48, 2.35, 0.75, size=38, bold=True, color=col)
-    label(s, desc, x + 0.2, 2.38, 2.35, 0.8,  size=10, color=DIM)
-
-# Visual comparison: error spike bar for context
-section_label(s, "ERROR COUNT DURING INCIDENT", 0.55, 3.78, w=5)
-error_spike_bars(s, x0=0.55, y0=4.1, w_total=5.5, h_total=0.9)
-
-section_label(s, "WHAT THIS UNLOCKS", 6.5, 3.78, w=6.3)
-unlocks = [
-    "Faster MTTR — spend time fixing, not finding",
-    "Instant documentation — structured report at the moment of resolution",
-    "Faster onboarding — new engineers get AI context when a bug hits production",
-]
-for i, u in enumerate(unlocks):
-    label(s, "→  " + u, 6.5, 4.2 + i * 0.62, 6.5, 0.55, size=12, color=OFFWHITE)
-
-tech_note(s, "22× speed improvement on this incident  ·  Generalises to any service — change the logs, change the report")
+s.shapes.add_picture(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "impact_illustration.png"),
+    Inches(0), Inches(0), Inches(13.33), Inches(7.5)
+)
+slide_number(s, 8, TOTAL)
 notes(s,
-"Point to the four numbers — let them land before you speak.\n\n"
-"88 minutes to find the problem. 14-minute detection gap. "
-"Error rate tripling while the investigation was ongoing.\n\n"
-"That's the cost. Not just engineering time — that's customer impact, that's trust.\n\n"
-"Then: ~4 minutes with AI Reckoning.\n\n"
-"The three bullets: faster MTTR, instant documentation, faster onboarding. "
+"Four numbers. Let them land before you speak.\n\n"
+"88 minutes — that's the manual root cause time on this real incident.\n"
+"~4 minutes — that's AI Reckoning on the same incident.\n"
+"2.7× — the error rate kept climbing the entire time the investigation was running.\n"
+"14 minutes — the gap between deploy and first alert. Silent failure window.\n\n"
+"Then the three bullets below:\n"
+"Faster MTTR — you spend time fixing, not finding.\n"
+"Instant documentation — the report exists the moment the root cause is identified.\n"
+"Faster onboarding — new engineers get AI context the first time they face production.\n\n"
 "This is what AI assistance looks like in a real engineering workflow.")
 
 
-# ── 11. Closing ───────────────────────────────────────────────────────────────
+# ── 9. Closing ────────────────────────────────────────────────────────────────
 s = add_slide()
 slide_bg(s)
-rect(s, 0, 0, 0.06, 7.5, fill=ACCENT)
-label(s, "RECKONING", 1.5, 2.6, 11, 2.5,
-      size=90, bold=True, color=RGBColor(0x28, 0x28, 0x36))
-
-label(s, "AI RECKONING", 1.2, 1.2, 11, 0.5, size=13, bold=True, color=ACCENT)
-label(s, "The engineer makes the decision.", 1.2, 1.88, 10, 0.65, size=38, bold=True, color=WHITE)
-label(s, "The AI does the detective work.",  1.2, 2.58, 10, 0.65, size=38, bold=True, color=DIM)
-
-rect(s, 1.2, 3.38, 4.5, 0.04, fill=ACCENT)
-
-label(s, "This ran on a real production incident.",   1.2, 3.62, 9, 0.45, size=13, color=DIM)
-label(s, "It'll run on the next one too.",            1.2, 4.08, 9, 0.45, size=13, color=DIM)
-
-rect(s, 1.2, 4.75, 8.0, 0.82, fill=RGBColor(0x0A, 0x1A, 0x14), line=ACCENT)
-label(s, "Manual investigation  88 min  →  ~4 min  with AI Reckoning",
-      1.55, 4.93, 7.5, 0.45, size=14, bold=True, color=ACCENT)
-
-label(s, "Chip1 Engineering  ·  Hackathon 2026", 1.2, 5.8, 8, 0.4, size=10, color=DIMMER)
-
-slide_number(s, 10, TOTAL)
+s.shapes.add_picture(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "assets", "closing_illustration.png"),
+    Inches(0), Inches(0), Inches(13.33), Inches(7.5)
+)
+slide_number(s, 9, TOTAL)
 notes(s,
 "Every incident like this costs engineering time, customer trust, and sleep.\n"
 "The investigation itself doesn't have to.\n\n"
 "AI Reckoning turns 88 minutes of manual correlation into a 4-minute report.\n"
 "The engineer still makes the decision. The AI does the detective work.\n\n"
 "This ran on a real production incident. It'll run on the next one too.\n\n"
-"[Pause. Let the room sit with the footer: 88 min → 4 min.]")
+"[Pause. Let the 88 min → ~4 min badge land. Then open for questions.]")
 
 
 # ─── Save ─────────────────────────────────────────────────────────────────────
