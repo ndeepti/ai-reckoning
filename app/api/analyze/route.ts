@@ -1,10 +1,20 @@
 import OpenAI from 'openai'
+import { config } from '@/lib/config'
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+function buildSystemPrompt(): string {
+  const svc = config.service
 
-const SYSTEM_PROMPT = `You are an expert SRE incident analysis agent for Chip1, a B2B supply chain and parts management platform built on Java Spring microservices. Services include: transaction-service (PO, invoices, shipments, port 4014), fn-connect-service (ERP/XCRM stock code sync and PO line validation), part-service (parts catalog), account-service, identity-service, and mc1-core — all behind a Caddy reverse proxy. Downstream systems include XCRM-prod (external ERP). Deployments are managed by Jenkins. You analyze logs, metrics, Teams threads, and deploy diffs to identify root causes and generate structured incident reports.
+  const serviceContext = [
+    svc.name        && `Service under investigation: ${svc.name}.`,
+    svc.description && `What it does: ${svc.description}.`,
+    svc.platform    && `Platform: ${svc.platform}.`,
+    svc.downstream  && `Downstream systems: ${svc.downstream}.`,
+    svc.ciTool      && `Deployments are managed by ${svc.ciTool}.`,
+  ].filter(Boolean).join(' ')
 
-IMPORTANT — TIMESTAMPS: Log entries contain two timestamps. The outer system timestamp (e.g. "2026-05-21 20:36:xx") is correct local time (IST). The inner "timestamp" field inside the JSON log body (e.g. "T 15:05:xx") is UTC (5h30min behind) — ignore it for the timeline. Always use outer system timestamps and metrics timestamps for all timeline events.
+  return `You are an expert SRE incident analysis agent.${serviceContext ? ` ${serviceContext}` : ''} You analyze logs, metrics, Teams threads, and deploy diffs to identify root causes and generate structured incident reports.
+
+IMPORTANT — TIMESTAMPS: Log entries may contain two timestamps. The outer system timestamp (e.g. "2026-05-21 20:36:xx") is correct local time. Any inner "timestamp" field inside a JSON log body may be UTC — ignore it for the timeline. Always use outer system timestamps and metrics timestamps for all timeline events.
 
 Respond in exactly two phases with no other text:
 
@@ -14,7 +24,7 @@ PHASE 1 — Stream your reasoning as discrete steps. Output each step on its own
 - Deploy event correlation (exact timestamp, version)
 - Teams thread correlation (who noticed, when)
 - Causal chain construction
-- Root cause identification (specific file, method, line)
+- Root cause identification (specific file, method, line if available)
 
 Each step should be 1–2 sentences. Output 6–10 steps total.
 
@@ -33,10 +43,19 @@ PHASE 2 — After all steps, output a single line starting with "result: " follo
 }
 
 causalChain: 4–6 items. timeline: 5–7 events sorted chronologically using outer system timestamps only.
-contributingFactors: 4–5 items — include one factor about detection gap (e.g. lack of alerting for entity ID validation failures before error volume threshold was breached).
-actions: 4–6 items — first action should reference the deployed fix (PR/release), remaining should be preventive. Assign realistic urgency.`
+contributingFactors: 4–5 items — include one factor about detection gap (e.g. lack of alerting before error volume threshold was breached).
+actions: 4–6 items — first action should reference the deployed fix (PR/release) if one exists in the data, remaining should be preventive. Assign realistic urgency.`
+}
 
 export async function POST(request: Request) {
+  if (!config.openai.apiKey) {
+    return Response.json(
+      { error: 'OPENAI_API_KEY is not configured. Add it to .env.local and restart the server.' },
+      { status: 503 }
+    )
+  }
+
+  const openai = new OpenAI({ apiKey: config.openai.apiKey })
   const { logs, metrics, teamsThread, deployDiff, contextNote } = await request.json()
 
   const userContent = `LOGS:
@@ -57,14 +76,14 @@ ${deployDiff}${contextNote ? `\n\nADDITIONAL CONTEXT FROM ENGINEER:\n${contextNo
     async start(controller) {
       try {
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4o',
+          model:      config.openai.model,
           messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: userContent as string },
+            { role: 'system', content: buildSystemPrompt() },
+            { role: 'user',   content: userContent },
           ],
-          stream: true,
+          stream:     true,
           temperature: 0.2,
-          max_tokens: 2000,
+          max_tokens:  2000,
         })
 
         let buffer = ''
@@ -84,7 +103,6 @@ ${deployDiff}${contextNote ? `\n\nADDITIONAL CONTEXT FROM ENGINEER:\n${contextNo
           }
         }
 
-        // flush remaining buffer
         const remaining = buffer.trim()
         if (remaining.startsWith('step:') || remaining.startsWith('result:')) {
           controller.enqueue(encoder.encode(remaining + '\n'))

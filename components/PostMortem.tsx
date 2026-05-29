@@ -120,7 +120,7 @@ export default function PostMortem({ data }: { data: IncidentReport | null }) {
         )}
       </div>
 
-      <div className="flex-1 scroll overflow-y-auto p-4 space-y-3" style={{ minHeight: 0 }}>
+      <div className="flex-1 scroll overflow-y-auto p-3 space-y-2" style={{ minHeight: 0 }}>
         {!data ? (
           <div className="h-full flex flex-col items-center justify-center gap-3" style={{ opacity: 0.4 }}>
             <div style={{ fontSize: 32, opacity: 0.3 }}>⬡</div>
@@ -144,7 +144,7 @@ export default function PostMortem({ data }: { data: IncidentReport | null }) {
                   </span>
                 </div>
 
-                <div className="p-4 rounded-lg" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderLeft: `3px solid ${conf[data.confidence].color}` }}>
+                <div className="p-3 rounded-lg" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderLeft: `3px solid ${conf[data.confidence].color}` }}>
                   <p style={{ color: 'var(--white)', fontSize: 13, lineHeight: 1.7, fontWeight: 500 }}>{data.rootCause}</p>
                 </div>
 
@@ -220,12 +220,12 @@ export default function PostMortem({ data }: { data: IncidentReport | null }) {
             {/* Insights */}
             {tab === 'Insights' && (
               <div className="space-y-2 fade-in">
-                <p className="section-label mb-3">CONTRIBUTING FACTORS</p>
+                <p className="section-label mb-2">CONTRIBUTING FACTORS</p>
                 {data.contributingFactors.map((f, i) => {
                   const colors = ['var(--error)', 'var(--warning)', '#a78bfa', 'var(--accent)']
                   const c = colors[i % colors.length]
                   return (
-                    <div key={i} className="flex items-start gap-3 p-3.5 rounded-lg fade-in"
+                    <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg fade-in"
                       style={{ background: 'var(--card)', border: '1px solid var(--border)', borderLeft: `2px solid ${c}` }}>
                       <div className="flex-shrink-0 rounded-full mt-1.5"
                         style={{ width: 6, height: 6, background: c }} />
@@ -239,11 +239,11 @@ export default function PostMortem({ data }: { data: IncidentReport | null }) {
             {/* Actionables */}
             {tab === 'Actionables' && (
               <div className="space-y-2 fade-in">
-                <p className="section-label mb-3">RECOMMENDED ACTIONS</p>
+                <p className="section-label mb-2">RECOMMENDED ACTIONS</p>
                 {data.actions.map((a, i) => {
                   const badge = getActionBadge(a)
                   return (
-                    <div key={i} className="flex items-start gap-3 p-3.5 rounded-lg fade-in"
+                    <div key={i} className="flex items-start gap-3 p-2.5 rounded-lg fade-in"
                       style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
                       <div className="flex-shrink-0 rounded flex items-center justify-center"
                         style={{ width: 16, height: 16, border: '1.5px solid var(--border-light)', borderRadius: 4, marginTop: 1 }} />

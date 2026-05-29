@@ -1,18 +1,20 @@
-// Power Automate posts here when a new message arrives in chip1-releases or Chip1-Integration.
+// Power Automate posts here when a new message arrives in a configured Teams channel.
 // Accepts channel by display name OR by GUID (Power Automate sends the channelIdentity GUID).
+// Channel names are configured via TEAMS_CHANNELS env var (comma-separated).
 
 import { pushMessage } from '@/lib/teamsStore'
+import { config } from '@/lib/config'
 
-const SECRET = process.env.TEAMS_WEBHOOK_SECRET ?? ''
+const SECRET = config.teams.webhookSecret
 
-// Runtime channel map: GUID → display name, populated via POST /api/teams/webhook/register
-// or auto-detected from name fragments
-const channelMap = new Map<string, string>([
-  ['chip1-releases',    'chip1-releases'],
-  ['chip1releases',     'chip1-releases'],
-  ['chip1-integration', 'Chip1-Integration'],
-  ['chip1integration',  'Chip1-Integration'],
-])
+// Seed channel map from TEAMS_CHANNELS config — supports any channel names
+// Keys: normalised (lowercase, no hyphens) → display name
+const channelMap = new Map<string, string>(
+  config.teams.channels.flatMap(ch => [
+    [ch.toLowerCase().replace(/[-_\s]/g, ''), ch],
+    [ch.toLowerCase(), ch],
+  ])
+)
 
 // GUIDs we've seen but couldn't map — logged so user can register them
 export const unknownChannels = new Set<string>()
@@ -21,15 +23,17 @@ function resolveChannel(raw: string): string {
   if (!raw) return 'unknown'
   // Exact match first
   if (channelMap.has(raw)) return channelMap.get(raw)!
-  // Case-insensitive name match
-  const lower = raw.toLowerCase()
+  // Normalised match (lowercase, strip hyphens/spaces — handles GUIDs and display names)
+  const normalised = raw.toLowerCase().replace(/[-_\s]/g, '')
   for (const [key, val] of channelMap) {
-    if (key.toLowerCase() === lower) return val
+    if (key === normalised) return val
   }
-  // Partial name match (GUID won't match; display name fragments will)
-  if (lower.includes('release')) return 'chip1-releases'
-  if (lower.includes('integr'))  return 'Chip1-Integration'
-  // Unknown — accept as-is so we don't drop messages
+  // Partial substring match against configured channel names (catches GUID fragments)
+  for (const ch of config.teams.channels) {
+    const fragment = ch.toLowerCase().replace(/[-_\s]/g, '')
+    if (normalised.includes(fragment) || fragment.includes(normalised)) return ch
+  }
+  // Unknown — accept as-is so we never drop messages
   return raw
 }
 

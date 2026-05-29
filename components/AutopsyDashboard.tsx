@@ -1,68 +1,140 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { AgentStep, IncidentReport, MockIncident, LiveFetchState } from '@/lib/types'
-import { mockIncident } from '@/lib/mockData'
-import { liveDeployDiff, liveMetrics } from '@/lib/liveData'
+import { AgentStep, IncidentReport, MockIncident, LiveFetchState, ProjectConfig } from '@/lib/types'
 import InputPanel from './InputPanel'
-import AgentSteps from './AgentSteps'
 import PostMortem from './PostMortem'
+import SettingsPanel from './SettingsPanel'
+import IntegrationsPanel from './IntegrationsPanel'
 
-const SidebarItem = ({ label, value, accent }: { label: string; value: string; accent?: boolean }) => (
-  <div className="px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-    <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)', marginBottom: 3 }}>{label}</p>
-    <p style={{ color: accent ? 'var(--accent)' : 'var(--sidebar-fg)', fontSize: 12, fontWeight: 500 }}>{value}</p>
-  </div>
-)
+type EvidenceTab = 'Logs' | 'Metrics' | 'Teams' | 'Jenkins' | 'GitHub' | 'Live'
+type MainView = 'evidence' | 'report'
 
-const StatCard = ({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) => (
-  <div
-    className="flex flex-col gap-1 px-4 py-3 rounded-lg"
-    style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
-  >
-    <p className="section-label">{label}</p>
-    <p style={{ color, fontSize: 22, fontWeight: 700, lineHeight: 1 }}>{value}</p>
-    <p style={{ color: 'var(--text-muted)', fontSize: 11 }}>{sub}</p>
-  </div>
-)
+interface LoadStep {
+  label: string
+  status: 'pending' | 'loading' | 'done' | 'error'
+  detail?: string
+}
 
-function LiveBanner({ state, onDismiss }: { state: LiveFetchState; onDismiss: () => void }) {
-  if (state.status === 'idle') return null
-  const colors = {
-    loading: { bg: 'var(--warning-bg)', border: 'rgba(245,158,11,0.25)', text: 'var(--warning)' },
-    done:    { bg: 'var(--accent-bg)',  border: 'var(--accent-border)',   text: 'var(--accent)' },
-    error:   { bg: 'var(--error-bg)',   border: 'var(--error-border)',    text: 'var(--error)' },
-  }[state.status] ?? { bg: 'var(--card)', border: 'var(--border)', text: 'var(--text)' }
-
+function FetchOverlay({ steps, service }: { steps: LoadStep[]; service: string }) {
   return (
-    <div
-      className="flex items-center gap-3 px-6 py-2 flex-shrink-0 fade-in"
-      style={{ background: colors.bg, borderBottom: `1px solid ${colors.border}` }}
-    >
-      {state.status === 'loading' && <span className="spin flex-shrink-0" style={{ color: colors.text, fontSize: 13 }}>⟳</span>}
-      {state.status === 'done'    && <span style={{ color: colors.text }}>✓</span>}
-      {state.status === 'error'   && <span style={{ color: colors.text }}>✗</span>}
-      <span style={{ color: colors.text, fontSize: 12, flex: 1 }}>
-        {state.status === 'loading' && `Fetching live data from ${state.source}…`}
-        {state.status === 'done'    && `Live data loaded from ${state.source}`}
-        {state.status === 'error'   && `${state.source}: ${state.error}`}
-      </span>
-      <button onClick={onDismiss} style={{ color: 'var(--text-dim)', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 50,
+      background: 'rgba(0,0,0,0.72)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      backdropFilter: 'blur(2px)',
+    }}>
+      <div style={{
+        background: 'var(--panel)', border: '1px solid var(--border)',
+        borderRadius: 12, padding: '32px 40px', minWidth: 360, maxWidth: 440,
+        boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+      }}>
+        <div className="flex items-center gap-3 mb-6">
+          <span className="spin" style={{ fontSize: 18, color: 'var(--accent)' }}>⟳</span>
+          <div>
+            <p style={{ color: 'var(--white)', fontSize: 14, fontWeight: 700 }}>Loading live data</p>
+            <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 2 }}>{service}</p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3">
+          {steps.map((s, i) => (
+            <div key={i} className="flex items-start gap-3">
+              <span style={{
+                width: 16, flexShrink: 0, marginTop: 1, fontSize: 12,
+                color: s.status === 'done' ? 'var(--accent)'
+                  : s.status === 'error' ? 'var(--error)'
+                  : s.status === 'loading' ? 'var(--warning)'
+                  : 'var(--text-dim)',
+              }}>
+                {s.status === 'done' ? '✓' : s.status === 'error' ? '✗' : s.status === 'loading' ? '⟳' : '○'}
+              </span>
+              <div>
+                <p style={{
+                  fontSize: 12, fontWeight: 500,
+                  color: s.status === 'pending' ? 'var(--text-dim)' : 'var(--text)',
+                }}>{s.label}</p>
+                {s.detail && (
+                  <p style={{ fontSize: 11, color: s.status === 'error' ? 'var(--error)' : 'var(--text-muted)', marginTop: 1 }}>
+                    {s.detail}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
 
+function LiveBanner({ state, onDismiss }: { state: LiveFetchState; onDismiss: () => void }) {
+  if (state.status === 'idle' || state.status === 'loading') return null
+  const colors = {
+    done:  { bg: 'var(--accent-bg)',  border: 'var(--accent-border)',   text: 'var(--accent)' },
+    error: { bg: 'var(--error-bg)',   border: 'var(--error-border)',    text: 'var(--error)' },
+  }[state.status] ?? { bg: 'var(--card)', border: 'var(--border)', text: 'var(--text)' }
+
+  return (
+    <div className="flex items-center gap-3 px-5 py-2 flex-shrink-0 fade-in"
+      style={{ background: colors.bg, borderBottom: `1px solid ${colors.border}` }}>
+      <span style={{ color: colors.text }}>{state.status === 'done' ? '✓' : '✗'}</span>
+      <span style={{ color: colors.text, fontSize: 12, flex: 1 }}>
+        {state.status === 'done' && `Live data loaded · ${state.source}`}
+        {state.status === 'error' && `${state.source}: ${state.error}`}
+      </span>
+      <button onClick={onDismiss}
+        style={{ color: 'var(--text-dim)', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+    </div>
+  )
+}
+
+type LokiService = { value: string; lokiLabel: string; lokiUrl: string }
+
+const KNOWN_SERVICES: LokiService[] = [
+  ...['chip1-account','chip1-agent-registry','chip1-company-research-assistant','chip1-config-server',
+      'chip1-crm-webui','chip1-general-agent','chip1-lookup','chip1-mc1-core','chip1-merger-agent',
+      'chip1-mysql-agent','chip1-outreach-agent-backend','chip1-outreach-agent-frontend','chip1-part',
+      'chip1-planner-agent','chip1-sql-assistant','chip1-transaction','chip1-webui',
+  ].map(v => ({ value: v, lokiLabel: 'service_name', lokiUrl: 'https://loki.chip1.info' })),
+  ...['fn-connect','fn-events-gateway','fn-events-service','fn-notification-common-service',
+      'fn-notification-dispatcher','fn-notification-publisher','fn-timeline-service',
+  ].map(v => ({ value: v, lokiLabel: 'service_name', lokiUrl: 'https://loki.altir.net' })),
+]
+
+const EVIDENCE_ITEMS: { id: EvidenceTab; icon: string | null; label: string }[] = [
+  { id: 'Logs',    icon: '≡',  label: 'Logs'    },
+  { id: 'Metrics', icon: '∿',  label: 'Metrics' },
+  { id: 'Teams',   icon: '⊛',  label: 'Teams'   },
+  { id: 'Jenkins', icon: '⚙',  label: 'Jenkins' },
+  { id: 'GitHub',  icon: '⑂',  label: 'GitHub'  },
+  { id: 'Live',    icon: null, label: 'Live'    },
+]
+
 export default function AutopsyDashboard() {
-  const [incident, setIncident] = useState<MockIncident | null>(mockIncident)
+  const [incident, setIncident] = useState<MockIncident | null>(null)
   const [steps, setSteps] = useState<AgentStep[]>([])
   const [postMortem, setPostMortem] = useState<IncidentReport | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [done, setDone] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [liveFetch, setLiveFetch] = useState<LiveFetchState>({ status: 'idle' })
-  const [dataMode, setDataMode] = useState<'mock' | 'live'>('mock')
+  const [dataLoaded, setDataLoaded] = useState(false)
+  const [loadingSteps, setLoadingSteps] = useState<LoadStep[]>([])
   const [contextNote, setContextNote] = useState('')
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [showSettings, setShowSettings] = useState(false)
+  const [showIntegrations, setShowIntegrations] = useState(false)
+  const [appConfig, setAppConfig] = useState<{ serviceName: string | null; lokiConfigured: boolean; lokiHealthy: boolean; openaiConfigured: boolean } | null>(null)
+  const [lokiServices, setLokiServices] = useState<LokiService[]>(KNOWN_SERVICES)
+  const [selectedProject, setSelectedProject] = useState<string>('fn')
+  const [selectedServices, setSelectedServices] = useState<string[]>([])
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [evidenceTab, setEvidenceTab] = useState<EvidenceTab>('Logs')
+  const [mainView, setMainView] = useState<MainView>('evidence')
+  const [projects, setProjects] = useState<ProjectConfig[]>([])
+  const [currentProject, setCurrentProject] = useState<ProjectConfig | null>(null)
+  const lastAppliedProjectId = useRef<string | null>(null)
   const stepIdRef = useRef(0)
   const startTimeRef = useRef(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -75,47 +147,223 @@ export default function AutopsyDashboard() {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [])
 
+  useEffect(() => {
+    if (postMortem && !isRunning) setMainView('report')
+  }, [postMortem, isRunning])
+
+  useEffect(() => {
+    fetch('/api/projects')
+      .then(r => r.json())
+      .then((data: ProjectConfig[]) => setProjects(data))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (projects.length === 0) return
+    const proj = projects.find(p => p.id === selectedProject)
+    if (!proj) return
+
+    // Clear service selection only when the project actually changes
+    if (proj.id !== lastAppliedProjectId.current) {
+      setSelectedServices([])
+    }
+    lastAppliedProjectId.current = proj.id
+    setCurrentProject(proj)
+
+    // Always re-apply project config (catches edits saved in Settings)
+    const updates: Record<string, string> = {}
+    if (proj.lokiQuery) updates.lokiQuery = proj.lokiQuery
+    if (proj.lokiUrl)   updates.lokiUrl   = proj.lokiUrl
+    if (proj.channels.length) updates.teamsChannels = proj.channels.join(',')
+    if (proj.jenkinsJob)  updates.jenkinsJob    = proj.jenkinsJob
+    if (proj.githubRepo)  updates.githubRepoUrl = proj.githubRepo
+    if (proj.githubBase)  updates.githubBranch  = proj.githubBase
+    if (proj.name)        updates.serviceName   = proj.name
+    if (Object.keys(updates).length) {
+      fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }).catch(() => {})
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects, selectedProject])
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.json())
+      .then((cfg: { serviceName: string | null; lokiConfigured: boolean; lokiHealthy: boolean; openaiConfigured: boolean; settings?: { lokiFrom?: string; lokiTo?: string; lokiQuery?: string } }) => {
+        setAppConfig(cfg)
+        const match = cfg.settings?.lokiQuery?.match(/service_name[=~]+"([^"]+)"/)
+        if (match) {
+          const svc = match[1]
+          if (svc.startsWith('fn-'))       setSelectedProject('fn')
+          else if (svc.includes('chip1-')) setSelectedProject('chip1')
+        }
+        if (cfg.settings?.lokiFrom) setDateFrom(cfg.settings.lokiFrom)
+        if (cfg.settings?.lokiTo)   setDateTo(cfg.settings.lokiTo)
+        if (cfg.lokiConfigured) {
+          fetch('/api/loki/services')
+            .then(r => r.json())
+            .then((d: { services: LokiService[] }) => {
+              const known = new Set(KNOWN_SERVICES.map(s => s.value))
+              const extras = d.services.filter(s => !known.has(s.value))
+              if (extras.length) setLokiServices([...KNOWN_SERVICES, ...extras])
+            })
+            .catch(() => {})
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function buildLokiQuery(services: string[], proj: ProjectConfig | null): string {
+    if (services.length === 0) return proj?.lokiQuery ?? ''
+    if (services.length === 1) return `{service_name="${services[0]}"}`
+    return `{service_name=~"${services.join('|')}"}`
+  }
+
   async function loadLiveData() {
-    setLiveFetch({ status: 'loading', source: 'Logs + Teams…' })
+    const svcLabel = selectedServices.length > 0
+      ? (selectedServices.length === 1 ? selectedServices[0] : `${selectedServices.length} services`)
+      : (currentProject?.name ?? appConfig?.serviceName ?? 'service')
+
+    const STEPS: LoadStep[] = [
+      { label: 'Saving config',                    status: 'pending' },
+      { label: `Fetching logs · ${svcLabel}`,      status: 'pending' },
+      { label: 'Polling Teams messages',            status: 'pending' },
+      { label: 'Fetching metrics',                  status: 'pending' },
+      { label: 'Fetching deploy diff',              status: 'pending' },
+    ]
+
+    const update = (idx: number, patch: Partial<LoadStep>) =>
+      setLoadingSteps(prev => prev.map((s, i) => i === idx ? { ...s, ...patch } : s))
+
+    setLoadingSteps(STEPS)
+    setLiveFetch({ status: 'loading', source: svcLabel })
+
+    const liveIncident: MockIncident = {
+      title: svcLabel, version: new Date().toISOString().slice(0, 10),
+      logs: '', metrics: [], teamsThread: [], deployDiff: '',
+    }
 
     try {
-      const [logsRes, teamsRes] = await Promise.all([
-        fetch('/api/logs'),
-        fetch('/api/teams'),
-      ])
-
-      const liveIncident = { ...mockIncident }
-
-      // Always use live diff + metrics — they match the real fn-connect-service incident
-      liveIncident.deployDiff = liveDeployDiff
-      liveIncident.metrics    = liveMetrics
-
-      if (logsRes.ok) {
-        const { lines } = await logsRes.json()
-        if (lines?.length) liveIncident.logs = lines.join('\n')
+      update(0, { status: 'loading' })
+      // Always write the correct lokiQuery + serviceName before fetching
+      const configUpdates: Record<string, string> = {}
+      const lokiQuery = buildLokiQuery(selectedServices, currentProject)
+      if (lokiQuery) configUpdates.lokiQuery = lokiQuery
+      if (currentProject?.lokiUrl) configUpdates.lokiUrl = currentProject.lokiUrl
+      // serviceName drives the log line prefix — use selected service(s) so logs show correct name
+      if (selectedServices.length > 0) configUpdates.serviceName = selectedServices.join(', ')
+      if (dateFrom) configUpdates.lokiFrom = dateFrom
+      if (dateTo)   configUpdates.lokiTo   = dateTo
+      if (Object.keys(configUpdates).length) {
+        await fetch('/api/config', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(configUpdates),
+        })
       }
+      update(0, { status: 'done', detail: lokiQuery || 'Config saved' })
 
-      if (teamsRes.ok) {
-        const messages: any[] = await teamsRes.json()
-        if (messages?.length) {
-          liveIncident.teamsThread = messages
-            .sort((a, b) => a.receivedAt - b.receivedAt)
-            .map((m) => ({
-              author:  m.role    || 'Engineer',
-              role:    m.role    || 'Engineer',
-              time:    m.time    || '',
-              text:    m.text    || '',
-              channel: m.channel || 'TestChannel1',
-              isAlert: m.isAlert ?? false,
-            }))
+      update(1, { status: 'loading' })
+      let logCount = 0
+      try {
+        const logsRes = await fetch('/api/logs')
+        if (logsRes.ok) {
+          const { lines } = await logsRes.json() as { lines?: string[] }
+          if (lines?.length) { liveIncident.logs = lines.join('\n'); logCount = lines.length }
+          update(1, { status: logCount > 0 ? 'done' : 'error',
+            detail: logCount > 0 ? `${logCount} lines` : 'No logs returned' })
+        } else {
+          const err = await logsRes.json().catch(() => ({})) as { error?: string }
+          update(1, { status: 'error', detail: err.error ?? `HTTP ${logsRes.status}` })
         }
+      } catch (e) {
+        update(1, { status: 'error', detail: (e as Error).message })
       }
+
+      update(2, { status: 'loading' })
+      try {
+        await fetch('/api/teams/graph-poll', { method: 'POST' })
+        const teamsRes = await fetch('/api/teams')
+        if (teamsRes.ok) {
+          const messages: Record<string, unknown>[] = await teamsRes.json()
+          if (messages?.length) {
+            liveIncident.teamsThread = messages
+              .sort((a, b) => (a.receivedAt as number) - (b.receivedAt as number))
+              .map(m => ({
+                author:  (m.role    as string) || 'Engineer',
+                role:    (m.role    as string) || 'Engineer',
+                time:    (m.time    as string) || '',
+                text:    (m.text    as string) || '',
+                channel: (m.channel as string) || '',
+                isAlert: (m.isAlert as boolean) ?? false,
+              }))
+            update(2, { status: 'done', detail: `${messages.length} messages` })
+          } else {
+            update(2, { status: 'done', detail: 'No messages in store' })
+          }
+        }
+      } catch (e) {
+        update(2, { status: 'error', detail: (e as Error).message })
+      }
+
+      update(3, { status: 'loading' })
+      try {
+        const metricsRes = await fetch('/api/loki/metrics')
+        if (metricsRes.ok) {
+          const { points } = await metricsRes.json() as { points: { time: string; errors: number }[] }
+          if (points?.length) {
+            liveIncident.metrics = points.map(p => ({ time: p.time, errorRate: p.errors }))
+            update(3, { status: 'done', detail: `${points.length} data points` })
+          } else {
+            update(3, { status: 'done', detail: 'No metrics data' })
+          }
+        }
+      } catch { update(3, { status: 'error', detail: 'Metrics unavailable' }) }
+
+      update(4, { status: 'loading' })
+      try {
+        const cfgRes = await fetch('/api/config')
+        if (cfgRes.ok) {
+          const cfg = await cfgRes.json() as { settings?: { jenkinsUrl?: string; jenkinsJob?: string; githubRepoUrl?: string; githubBranch?: string; githubHead?: string } }
+          const results: string[] = []
+
+          if (cfg.settings?.jenkinsUrl && cfg.settings?.jenkinsJob) {
+            try {
+              const r = await fetch('/api/diff/jenkins')
+              if (r.ok) {
+                const d = await r.json() as { buildNumber?: number; date?: string; result?: string | null; changeCount?: number; text?: string }
+                if (d.buildNumber) {
+                  liveIncident.jenkinsBuild = { buildNumber: d.buildNumber, date: d.date ?? '', result: d.result ?? null, changeCount: d.changeCount ?? 0, text: d.text ?? '' }
+                  results.push(`Jenkins #${d.buildNumber} ${d.result ?? ''}`)
+                }
+              }
+            } catch { /* Jenkins optional */ }
+          }
+
+          if (cfg.settings?.githubRepoUrl && cfg.settings?.githubHead) {
+            try {
+              const params = new URLSearchParams({ repo: cfg.settings.githubRepoUrl, base: cfg.settings.githubBranch || 'main', head: cfg.settings.githubHead })
+              const r = await fetch(`/api/diff/github?${params}`)
+              if (r.ok) {
+                const d = await r.json() as { text?: string; commits?: number }
+                if (d.text) { liveIncident.deployDiff = d.text; results.push(`GitHub ${d.commits ?? 0} commits`) }
+              }
+            } catch { /* GitHub optional */ }
+          }
+
+          update(4, { status: 'done', detail: results.length ? results.join(' · ') : 'Not configured' })
+        }
+      } catch { update(4, { status: 'error', detail: 'Diff unavailable' }) }
 
       setIncident(liveIncident)
-      setDataMode('live')
-      setLiveFetch({ status: 'done', source: 'fn-connect logs + Teams live' })
+      setDataLoaded(true)
+      const summary = logCount > 0
+        ? `${svcLabel} · ${logCount} logs`
+        : '0 logs — check service selection or LogQL in Settings'
+      setLiveFetch({ status: logCount > 0 ? 'done' : 'error', source: summary, error: logCount > 0 ? undefined : summary })
     } catch (e) {
-      setLiveFetch({ status: 'error', source: 'Live', error: (e as Error).message })
+      setLiveFetch({ status: 'error', source: svcLabel, error: (e as Error).message })
+    } finally {
+      setTimeout(() => setLoadingSteps([]), 1200)
     }
   }
 
@@ -126,6 +374,7 @@ export default function AutopsyDashboard() {
     setDone(false)
     setIsRunning(true)
     setElapsed(0)
+    setMainView('evidence')
     stepIdRef.current = 0
     startTimeRef.current = Date.now()
     timerRef.current = setInterval(() => {
@@ -144,7 +393,11 @@ export default function AutopsyDashboard() {
           contextNote: contextNote.trim() || undefined,
         }),
       })
-      if (!res.ok || !res.body) throw new Error('Stream failed')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(err.error ?? `HTTP ${res.status}`)
+      }
+      if (!res.body) throw new Error('No response body from /api/analyze')
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -170,288 +423,504 @@ export default function AutopsyDashboard() {
           }
         }
       }
-    } catch (e) { console.error(e) }
-    finally {
+    } catch (e) {
+      const msg = (e as Error).message ?? 'Unknown error'
+      setSteps((prev) => [
+        ...prev.map((s) => ({ ...s, done: true })),
+        { id: stepIdRef.current++, text: `Error: ${msg}`, done: true },
+      ])
+    } finally {
       setIsRunning(false)
       setDone(true)
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
     }
   }
 
-  const status = isRunning ? 'live' : done ? 'complete' : 'standby'
-  const statusColor = { live: 'var(--error)', complete: 'var(--accent)', standby: 'var(--text-muted)' }[status]
   const elapsedStr = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`
-  const timeSaved = done ? `${Math.max(0, 88 - elapsed)} min` : '84 min'
+  const svcDisplay = selectedServices.length > 0
+    ? (selectedServices.length === 1 ? selectedServices[0] : `${selectedServices.length} services`)
+    : (currentProject?.name ?? appConfig?.serviceName ?? '')
 
-  const metrics = incident?.metrics ?? []
-  const peakCount = metrics.length ? Math.max(...metrics.map(m => m.errorRate)) : 0
-  const baselineCount = metrics.length
-    ? Math.round(metrics.slice(0, 6).reduce((s, m) => s + m.errorRate, 0) / Math.min(6, metrics.length))
-    : 0
-  const peakDisplay = peakCount ? peakCount.toLocaleString() : '—'
-  const peakSub = baselineCount ? `baseline ~${baselineCount.toLocaleString()} / 2min` : 'errors per 2min window'
+  const serviceList = currentProject?.services.length
+    ? currentProject.services
+    : lokiServices
+        .filter(s => selectedProject === 'chip1' ? s.value.includes('chip1-') : s.value.startsWith('fn-'))
+        .map(s => s.value)
+
+  const evidenceBadge: Record<EvidenceTab, string | null> = {
+    Logs:    incident?.logs ? String(incident.logs.split('\n').filter(Boolean).length) : null,
+    Metrics: incident?.metrics?.length ? String(incident.metrics.length) : null,
+    Teams:   incident?.teamsThread?.length ? String(incident.teamsThread.length) : null,
+    Jenkins: incident?.jenkinsBuild ? `#${incident.jenkinsBuild.buildNumber}` : null,
+    GitHub:  incident?.deployDiff ? '✓' : null,
+    Live:    null,
+  }
+
+  const selectStyle: React.CSSProperties = {
+    background: 'var(--panel-hover)', color: 'var(--text)',
+    border: '1px solid var(--border)', borderRadius: 5,
+    padding: '5px 8px', fontSize: 11, outline: 'none',
+    cursor: 'pointer', width: '100%',
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: 'var(--panel-hover)', color: 'var(--text)',
+    border: '1px solid var(--border)', borderRadius: 5,
+    padding: '5px 8px', fontSize: 11, outline: 'none',
+    colorScheme: theme as 'dark' | 'light',
+    width: '100%',
+  }
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 9, fontWeight: 700, letterSpacing: '0.1em',
+    textTransform: 'uppercase', color: 'var(--label)',
+  }
+
+  const btnUtilStyle: React.CSSProperties = {
+    background: 'var(--panel-hover)', color: 'var(--text-muted)',
+    border: '1px solid var(--border)', borderRadius: 6,
+    padding: '5px 10px', fontSize: 11, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', gap: 5,
+    textDecoration: 'none', fontWeight: 500,
+  }
 
   return (
-    <div className="flex h-screen" style={{ background: 'var(--bg)' }}>
+    <>
+    <div className="flex flex-col h-screen" style={{ background: 'var(--bg)' }}>
 
-      {/* ── Sidebar ── */}
-      <aside
-        className="flex flex-col flex-shrink-0"
-        style={{ width: 200, background: 'var(--sidebar)', borderRight: '1px solid var(--border)' }}
-      >
-        {/* Logo */}
-        <div
-          className="flex items-center gap-2.5 px-4"
-          style={{ height: 52, borderBottom: '1px solid var(--border)' }}
-        >
-          <div
-            className="flex items-center justify-center rounded-md"
-            style={{ width: 28, height: 28, background: 'var(--accent-bg)', border: '1px solid var(--accent-border)' }}
-          >
-            <span style={{ color: 'var(--accent)', fontSize: 13, fontWeight: 800 }}>R</span>
-          </div>
-          <span style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 700, letterSpacing: '-0.01em' }}>
-            AI Reckoning
+      {/* ── Slim header ── */}
+      <header style={{
+        height: 48, flexShrink: 0,
+        background: 'var(--sidebar)', borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', padding: '0 20px', gap: 10,
+      }}>
+        <div style={{ width: 26, height: 26, background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ color: 'var(--accent)', fontSize: 12, fontWeight: 800 }}>R</span>
+        </div>
+        <span style={{ color: 'var(--white)', fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}>AI Reckoning</span>
+        {svcDisplay && (
+          <>
+            <span style={{ color: 'var(--border)', fontSize: 14, margin: '0 2px' }}>›</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{svcDisplay}</span>
+            {dataLoaded && (
+              <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-border)', letterSpacing: '0.08em' }}>
+                LIVE
+              </span>
+            )}
+          </>
+        )}
+
+        <div style={{ flex: 1 }} />
+
+        {appConfig && (
+          <span title={appConfig.lokiHealthy ? 'Loki connected' : appConfig.lokiConfigured ? 'Loki unreachable' : 'Loki not configured'}
+            style={{
+              fontSize: 10, fontWeight: 600, padding: '3px 8px', borderRadius: 4, cursor: 'default',
+              background: appConfig.lokiHealthy ? 'var(--accent-bg)' : 'var(--panel-hover)',
+              color: appConfig.lokiHealthy ? 'var(--accent)' : 'var(--text-dim)',
+              border: `1px solid ${appConfig.lokiHealthy ? 'var(--accent-border)' : 'var(--border)'}`,
+            }}>
+            {appConfig.lokiHealthy ? '⬤ Loki' : '◯ Loki'}
+          </span>
+        )}
+        <button onClick={() => setShowIntegrations(true)} style={btnUtilStyle}>⚡ Integrations</button>
+        <button onClick={() => setShowSettings(true)} style={btnUtilStyle}>⚙ Settings</button>
+        <button onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')} style={{ ...btnUtilStyle, padding: '5px 9px' }}>
+          {theme === 'dark' ? '☀' : '☽'}
+        </button>
+        <a href="https://grafana.altir.net" target="_blank" rel="noopener noreferrer" style={btnUtilStyle}>
+          <span style={{ fontSize: 10 }}>↗</span> Grafana
+        </a>
+      </header>
+
+      {/* OpenAI warning */}
+      {appConfig && !appConfig.openaiConfigured && (
+        <div style={{ padding: '7px 20px', background: 'var(--warning-bg)', borderBottom: '1px solid rgba(245,158,11,0.25)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ color: 'var(--warning)', fontSize: 12 }}>⚠</span>
+          <span style={{ color: 'var(--warning)', fontSize: 11 }}>
+            OPENAI_API_KEY is not set — Run Reckoning will fail. Add it to <code style={{ fontFamily: 'monospace' }}>.env.local</code> and restart.
           </span>
         </div>
+      )}
 
-        {/* Status */}
-        <div className="px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
-          <div className="flex items-center gap-2">
-            <div
-              className="rounded-full flex-shrink-0"
-              style={{ width: 7, height: 7, background: statusColor, animation: isRunning ? 'pulse 1.5s ease-in-out infinite' : 'none' }}
-            />
-            <span style={{ color: statusColor, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              {status}
-            </span>
-          </div>
-        </div>
+      {/* ── Workspace ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', minHeight: 0 }}>
 
-        {/* Incident meta */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="px-4 pt-4 pb-2">
-            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)' }}>INCIDENT</p>
-          </div>
-          <SidebarItem label="Severity"  value={postMortem ? `P1 — ${postMortem.confidence}` : '—'} accent={!!postMortem} />
-          <SidebarItem label="Root Cause" value={postMortem ? postMortem.rootCause.slice(0, 40) + (postMortem.rootCause.length > 40 ? '…' : '') : '—'} />
-          <SidebarItem label="File"      value={postMortem?.file ?? '—'} />
-          <SidebarItem label="Confidence" value={postMortem?.confidence ?? '—'} />
+        {loadingSteps.length > 0 && (
+          <FetchOverlay steps={loadingSteps} service={svcDisplay || 'service'} />
+        )}
 
-          <div className="px-4 pt-5 pb-2">
-            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)' }}>TIMELINE</p>
-          </div>
-          {postMortem?.timeline?.slice(0, 3).map((t, i) => (
-            <SidebarItem key={i} label={t.time} value={t.event.slice(0, 36) + (t.event.length > 36 ? '…' : '')} />
-          )) ?? <SidebarItem label="—" value="Run analysis to populate" />}
+        {/* ── LEFT SIDEBAR ── */}
+        <aside style={{
+          width: 248, flexShrink: 0,
+          borderRight: '1px solid var(--border)',
+          background: 'var(--sidebar)',
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
 
+          {/* Service config */}
+          <div style={{ padding: '12px 14px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
 
-          <div className="px-4 pt-5 pb-2">
-            <p style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--sidebar-label)' }}>DATA SOURCE</p>
-          </div>
-          <div className="px-4 pb-3 flex flex-col gap-2">
-            <span
-              className="px-2 py-1 rounded text-xs font-semibold self-start"
-              style={{
-                background: dataMode === 'live' ? 'var(--accent-bg)' : 'var(--panel-hover)',
-                color: dataMode === 'live' ? 'var(--accent)' : 'var(--text-muted)',
-                border: `1px solid ${dataMode === 'live' ? 'var(--accent-border)' : 'var(--border)'}`,
-                fontSize: 10,
+            {/* Project selector — full width, clearly labelled */}
+            <p style={{ ...labelStyle, marginBottom: 5 }}>Project</p>
+            <select value={selectedProject}
+              onChange={e => {
+                const pid = e.target.value
+                setSelectedProject(pid)
+                // project sync effect will handle config update + service reset
               }}
-            >
-              {dataMode === 'live' ? '⬤ LIVE' : '◯ MOCK'}
-            </span>
+              style={{ ...selectStyle, width: '100%', marginBottom: 10, fontSize: 12, padding: '6px 8px' }}>
+              {projects.length > 0
+                ? projects.map(p => <option key={p.id} value={p.id}>{p.name || p.id}</option>)
+                : <><option value="chip1">chip1</option><option value="fn">fn</option></>
+              }
+            </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: selectedServices.length > 0 ? 5 : 6 }}>
+              <p style={labelStyle}>Services{selectedServices.length > 0 ? ` · ${selectedServices.length}` : ''}</p>
+              {selectedServices.length > 0 && (
+                <button onClick={() => setSelectedServices([])}
+                  style={{ fontSize: 9, color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  clear all
+                </button>
+              )}
+            </div>
+
+            {/* Selected service chips — always visible */}
+            {selectedServices.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                {selectedServices.map(svc => (
+                  <span key={svc} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 10, fontWeight: 600,
+                    padding: '2px 7px', borderRadius: 4,
+                    background: 'var(--accent-bg)', color: 'var(--accent)',
+                    border: '1px solid var(--accent-border)',
+                  }}>
+                    {svc.replace(/^(chip1-|fn-)/, '')}
+                    <button onClick={() => setSelectedServices(prev => prev.filter(s => s !== svc))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: 10, padding: 0, lineHeight: 1 }}>
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Multi-select service checkboxes */}
+            <div style={{ maxHeight: 96, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--bg)', marginBottom: 8 }}>
+              {serviceList.length === 0 ? (
+                <p style={{ fontSize: 10, color: 'var(--text-dim)', padding: '8px 10px' }}>No services — configure in Settings → Projects</p>
+              ) : serviceList.map(svc => {
+                const checked = selectedServices.includes(svc)
+                return (
+                  <label key={svc} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 8px', cursor: 'pointer', userSelect: 'none', background: checked ? 'rgba(0,194,168,0.06)' : 'transparent' }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={e => setSelectedServices(prev =>
+                        e.target.checked ? [...prev, svc] : prev.filter(s => s !== svc)
+                      )}
+                      style={{ accentColor: 'var(--accent)', cursor: 'pointer', width: 12, height: 12, flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: 11, color: checked ? 'var(--accent)' : 'var(--text-dim)', lineHeight: 1.4, fontWeight: checked ? 500 : 400 }}>
+                      {svc.replace(/^(chip1-|fn-)/, '')}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+            <div style={{ marginBottom: 6 }}>
+              <p style={{ ...labelStyle, marginBottom: 4 }}>From</p>
+              <input type="datetime-local" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ ...labelStyle, marginBottom: 4 }}>To</p>
+              <input type="datetime-local" value={dateTo} onChange={e => setDateTo(e.target.value)} style={inputStyle} />
+            </div>
             <button
-              onClick={loadLiveData}
+              onClick={() => loadLiveData()}
               disabled={liveFetch.status === 'loading'}
-              className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg font-semibold transition-all"
               style={{
-                background: 'var(--panel-hover)',
-                color: 'var(--text-muted)',
-                fontSize: 11,
-                cursor: liveFetch.status === 'loading' ? 'not-allowed' : 'pointer',
-                border: '1px solid var(--border)',
-              }}
-            >
+                width: '100%', height: 32, borderRadius: 6,
+                background: liveFetch.status === 'loading' ? 'var(--panel-hover)' : dataLoaded ? 'var(--card)' : 'var(--panel-hover)',
+                color: liveFetch.status === 'loading' ? 'var(--text-dim)' : dataLoaded ? 'var(--text)' : 'var(--text-muted)',
+                border: `1px solid ${dataLoaded ? 'var(--border)' : 'var(--border)'}`,
+                fontSize: 11, fontWeight: 600, cursor: liveFetch.status === 'loading' ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
               {liveFetch.status === 'loading'
-                ? <><span className="spin" style={{ display: 'inline-block', fontSize: 10 }}>⟳</span> Fetching...</>
+                ? <><span className="spin" style={{ display: 'inline-block', fontSize: 10 }}>⟳</span> Fetching…</>
+                : dataLoaded ? <><span style={{ fontSize: 10 }}>↺</span> Refresh Data</>
                 : <><span style={{ fontSize: 10 }}>⬇</span> Load Live Data</>
               }
             </button>
           </div>
-        </div>
 
-      </aside>
-
-      {/* ── Main content ── */}
-      <div className="flex flex-col flex-1 overflow-hidden">
-
-        {/* Header */}
-        <header
-          className="flex items-center justify-between px-6 flex-shrink-0"
-          style={{ height: 52, borderBottom: '1px solid var(--border)', background: 'var(--sidebar)' }}
-        >
-          <div>
-            <h1 style={{ color: 'var(--white)', fontSize: 15, fontWeight: 600 }}>
-              {postMortem ? `P1 — ${postMortem.rootCause.slice(0, 60)}${postMortem.rootCause.length > 60 ? '…' : ''}` : 'AI Reckoning — Incident Investigation'}
-            </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 1 }}>
-              {dataMode === 'live' ? 'Live · Chip1-Integration + chip1-releases' : 'Mock incident data'} · {new Date().toISOString().slice(0, 10)}
-            </p>
+          {/* Evidence nav */}
+          <div style={{ flexShrink: 0, paddingTop: 10, paddingBottom: 4 }}>
+            <p style={{ ...labelStyle, padding: '0 16px 6px' }}>Evidence</p>
+            {EVIDENCE_ITEMS.map(({ id, icon, label }) => {
+              const active = evidenceTab === id && mainView === 'evidence'
+              const badge = evidenceBadge[id]
+              const isLive = id === 'Live'
+              return (
+                <button key={id}
+                  onClick={() => { setEvidenceTab(id); setMainView('evidence') }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 9,
+                    padding: '7px 14px 7px 10px', width: '100%',
+                    background: active ? 'rgba(0,194,168,0.07)' : 'none',
+                    border: 'none',
+                    borderLeft: `2px solid ${active ? 'var(--accent)' : 'transparent'}`,
+                    cursor: 'pointer', textAlign: 'left',
+                  }}>
+                  {isLive
+                    ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--error)', display: 'inline-block', flexShrink: 0, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                    : <span style={{ fontSize: 11, color: active ? 'var(--accent)' : badge ? 'var(--text)' : 'var(--text-dim)', width: 14, textAlign: 'center', flexShrink: 0 }}>{icon}</span>
+                  }
+                  <span style={{ fontSize: 11, color: active ? 'var(--accent)' : badge ? 'var(--text)' : 'var(--text-dim)', flex: 1, fontWeight: active ? 600 : 400 }}>
+                    {label}
+                  </span>
+                  {badge ? (
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                      background: active ? 'var(--accent-bg)' : 'rgba(255,255,255,0.06)',
+                      color: active ? 'var(--accent)' : 'var(--text-dim)',
+                      border: `1px solid ${active ? 'var(--accent-border)' : 'rgba(255,255,255,0.08)'}`,
+                    }}>
+                      {badge}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all hover:opacity-80"
-              style={{ background: 'var(--panel-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}
-              title="Toggle theme"
-            >
-              {theme === 'dark' ? '☀' : '☽'} {theme === 'dark' ? 'Light' : 'Dark'}
-            </button>
-            <a
-              href="https://grafana.altir.net"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-opacity hover:opacity-80"
-              style={{ background: 'var(--panel-hover)', color: 'var(--text-muted)', border: '1px solid var(--border)', textDecoration: 'none' }}
-            >
-              <span style={{ fontSize: 10 }}>↗</span> Grafana
-            </a>
-            {postMortem?.confidence && (
-              <span className="px-3 py-1 rounded-md text-xs font-semibold"
-                style={{ background: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
-                {postMortem.confidence} confidence
-              </span>
+
+          {/* Agent steps — flex fills middle space */}
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {steps.length > 0 && (
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px 6px', flexShrink: 0 }}>
+                  <p style={labelStyle}>Agent Steps</p>
+                  {isRunning
+                    ? <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--warning)', letterSpacing: '0.08em' }}>STREAMING</span>
+                    : <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.08em' }}>COMPLETE</span>
+                  }
+                </div>
+                <div style={{ flex: 1, overflow: 'auto', padding: '0 10px 10px' }}>
+                  {steps.map((step, i) => {
+                    const isActive = i === steps.length - 1 && isRunning
+                    return (
+                      <div key={step.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 7, padding: '4px 6px', marginBottom: 2, borderRadius: 5, background: isActive ? 'var(--warning-bg)' : 'transparent' }}>
+                        <span style={{ fontSize: 10, marginTop: 1, flexShrink: 0, color: step.done ? 'var(--accent)' : 'var(--warning)' }}>
+                          {step.done ? '✓' : '⟳'}
+                        </span>
+                        <span style={{ fontSize: 10, color: isActive ? 'var(--text)' : 'var(--text-muted)', lineHeight: 1.5, wordBreak: 'break-word' }}>
+                          {step.text}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             )}
           </div>
-        </header>
 
-        {/* Live fetch status banner */}
-        <LiveBanner state={liveFetch} onDismiss={() => setLiveFetch({ status: 'idle' })} />
-
-        {/* Stat cards */}
-        <div
-          className="grid grid-cols-4 gap-3 px-6 py-4 flex-shrink-0"
-          style={{ borderBottom: '1px solid var(--border)', background: 'var(--sidebar)' }}
-        >
-          <StatCard label="Peak Error Count" value={peakDisplay} sub={peakSub} color="var(--error)" />
-          <StatCard label="Deploy Event"   value={postMortem?.timeline?.find(t => t.type === 'deploy')?.time ?? '—'} sub="From timeline" color="var(--warning)" />
-          <StatCard label="First Failure"  value={postMortem?.timeline?.find(t => t.type === 'alert')?.time  ?? '—'} sub="Error spike detected" color="var(--warning)" />
-          <StatCard
-            label="Time Saved"
-            value={isRunning ? elapsedStr : timeSaved}
-            sub={isRunning ? 'AI analysis in progress...' : 'vs. manual (88 min avg)'}
-            color={isRunning ? 'var(--warning)' : 'var(--accent)'}
-          />
-        </div>
-
-        {/* Panel header row */}
-        <div
-          className="grid flex-shrink-0"
-          style={{ gridTemplateColumns: '1fr 1fr 1fr', borderBottom: '1px solid var(--border)' }}
-        >
-          {[
-            { label: 'INPUT DATA',      sub: dataMode === 'live' ? 'Live · fn-connect-service' : 'Mock incident data' },
-            { label: 'AGENT REASONING', sub: isRunning ? `${steps.length} steps streaming...` : done ? `${steps.length} steps complete` : 'Waiting for run' },
-            { label: 'ANALYSIS REPORT', sub: done ? `${postMortem?.confidence ?? ''} confidence · ${postMortem?.causalChain?.length ?? 0} causal steps` : 'Not yet generated' },
-          ].map(({ label, sub }, i) => (
-            <div
-              key={label}
-              className="px-5 py-3"
-              style={{ borderRight: i < 2 ? '1px solid var(--border)' : 'none', background: 'var(--panel)' }}
-            >
-              <p className="section-label">{label}</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 2 }}>{sub}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* 3 panels */}
-        <div className="grid flex-1 overflow-hidden" style={{ gridTemplateColumns: '1fr 1fr 1fr', minHeight: 0 }}>
-          <div style={{ borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-            <InputPanel
-              incident={incident}
-              onLogsChange={(logs) => setIncident((prev) => prev ? { ...prev, logs } : prev)}
-              onDiffChange={(deployDiff) => setIncident((prev) => prev ? { ...prev, deployDiff } : prev)}
-            />
-          </div>
-          <div style={{ borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-            <AgentSteps steps={steps} isRunning={isRunning} />
-          </div>
-          <div style={{ overflow: 'hidden' }}>
-            <PostMortem data={postMortem} />
-          </div>
-        </div>
-
-        {/* Footer — action bar */}
-        <div
-          className="flex items-center gap-3 px-4 flex-shrink-0"
-          style={{ borderTop: '1px solid var(--border)', background: 'var(--panel)', height: 56 }}
-        >
-          {/* Left: branding */}
-          <p style={{ color: 'var(--text-dim)', fontSize: 11, whiteSpace: 'nowrap', flexShrink: 0 }}>
-            Manual&nbsp;<span style={{ color: 'var(--error)', fontWeight: 700 }}>88 min</span>
-            &nbsp;→&nbsp;<span style={{ color: 'var(--accent)', fontWeight: 700 }}>~4 min</span>
-          </p>
-
-          {/* Center: context input */}
-          <div
-            className="flex items-center gap-2 flex-1"
-            style={{
-              background: 'var(--panel-hover)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              padding: '0 12px',
-              height: 36,
-            }}
-          >
-            <span style={{ color: 'var(--text-dim)', fontSize: 12, flexShrink: 0 }}>✎</span>
+          {/* Investigation — always pinned at bottom */}
+          <div style={{ borderTop: '1px solid var(--border)', padding: '14px', flexShrink: 0 }}>
+            <p style={{ ...labelStyle, marginBottom: 10 }}>Investigation</p>
             <textarea
               value={contextNote}
-              onChange={(e) => setContextNote(e.target.value)}
-              placeholder="Add context for AI — known infra changes, suspects, ruled-out causes..."
-              rows={1}
+              onChange={e => setContextNote(e.target.value)}
+              placeholder="Brief the AI — suspects, recent changes, ruled-out causes…"
+              rows={3}
               style={{
-                flex: 1,
-                background: 'transparent',
+                width: '100%',
+                background: 'var(--panel-hover)',
                 color: 'var(--text)',
-                border: 'none',
-                padding: '0',
-                fontSize: 12,
+                border: '1px solid var(--border)',
+                borderRadius: 6,
+                padding: '8px 10px',
+                fontSize: 11,
                 resize: 'none',
                 outline: 'none',
                 fontFamily: 'inherit',
-                lineHeight: '36px',
+                lineHeight: 1.6,
+                marginBottom: 10,
               }}
+              onFocus={e => (e.target.style.borderColor = 'var(--accent)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--border)')}
             />
+            <button
+              onClick={runAutopsy}
+              disabled={isRunning || !incident}
+              className="btn-glow"
+              style={{
+                width: '100%', height: 42, borderRadius: 8,
+                background: isRunning ? 'var(--warning-bg)' : !incident ? 'var(--panel-hover)' : 'var(--accent)',
+                color: isRunning ? 'var(--warning)' : !incident ? 'var(--text-dim)' : '#0d0f14',
+                border: isRunning ? '1px solid rgba(245,158,11,0.3)' : !incident ? '1px solid var(--border)' : 'none',
+                fontSize: 13, fontWeight: 700, cursor: isRunning || !incident ? 'not-allowed' : 'pointer',
+                boxShadow: !isRunning && incident ? '0 0 24px rgba(0,194,168,0.4), 0 4px 12px rgba(0,0,0,0.3)' : 'none',
+                letterSpacing: '0.02em',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+              title={!incident ? 'Load live data first' : undefined}
+            >
+              {isRunning
+                ? <><span className="spin" style={{ display: 'inline-block', fontSize: 13 }}>⟳</span> Analysing…</>
+                : done
+                ? <><span style={{ fontSize: 12 }}>↺</span> Re-run Reckoning</>
+                : <><span style={{ fontSize: 12 }}>▶</span> Run Reckoning</>
+              }
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+              {isRunning ? (
+                <span style={{ color: 'var(--warning)', fontSize: 10, fontWeight: 600 }}>{elapsedStr} elapsed</span>
+              ) : done && postMortem ? (
+                <span style={{ color: 'var(--accent)', fontSize: 10, fontWeight: 600 }}>✓ {postMortem.confidence} confidence</span>
+              ) : !incident ? (
+                <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>Load live data first</span>
+              ) : (
+                <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>~4 min end-to-end</span>
+              )}
+              <span style={{ color: 'var(--text-dim)', fontSize: 10 }}>
+                saves <span style={{ color: 'var(--accent)', fontWeight: 700 }}>84 min</span>
+              </span>
+            </div>
           </div>
+        </aside>
 
-          {/* Right: primary action */}
-          <button
-            onClick={runAutopsy}
-            disabled={isRunning}
-            className="btn-glow flex items-center justify-center gap-2 px-8 font-bold transition-all flex-shrink-0"
-            style={{
-              background: isRunning ? 'var(--panel-hover)' : 'var(--accent)',
-              color: isRunning ? 'var(--text-muted)' : '#0d0f14',
-              fontSize: 14,
-              cursor: isRunning ? 'not-allowed' : 'pointer',
-              border: 'none',
-              borderRadius: 8,
-              minWidth: 160,
-              boxShadow: isRunning ? 'none' : '0 0 24px rgba(0,194,168,0.4)',
-              letterSpacing: '0.01em',
-            }}
-          >
-            {isRunning
-              ? <><span className="spin" style={{ display: 'inline-block', fontSize: 13 }}>⟳</span> Analysing... {elapsedStr}</>
-              : done
-              ? <><span style={{ fontSize: 15 }}>↺</span> Re-run</>
-              : <><span style={{ fontSize: 15 }}>▶</span> Run Reckoning</>
-            }
-          </button>
-        </div>
+        {/* ── MAIN CONTENT ── */}
+        <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--panel)' }}>
+
+          {/* Live fetch banner */}
+          <LiveBanner state={liveFetch} onDismiss={() => setLiveFetch({ status: 'idle' })} />
+
+          {/* View toggle — only shown when report exists */}
+          {(postMortem || isRunning) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2, padding: '0 20px', height: 44, borderBottom: '1px solid var(--border)', background: 'var(--sidebar)', flexShrink: 0 }}>
+              <button
+                onClick={() => setMainView('evidence')}
+                style={{
+                  padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: mainView === 'evidence' ? 600 : 400,
+                  background: mainView === 'evidence' ? 'var(--panel-hover)' : 'none',
+                  color: mainView === 'evidence' ? 'var(--text)' : 'var(--text-dim)',
+                  border: mainView === 'evidence' ? '1px solid var(--border)' : '1px solid transparent',
+                  cursor: 'pointer',
+                }}>
+                Evidence
+              </button>
+              <button
+                onClick={() => setMainView('report')}
+                style={{
+                  padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: mainView === 'report' ? 600 : 400,
+                  background: mainView === 'report' ? 'var(--panel-hover)' : 'none',
+                  color: mainView === 'report' ? 'var(--accent)' : 'var(--text-dim)',
+                  border: mainView === 'report' ? '1px solid var(--accent-border)' : '1px solid transparent',
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                Report
+                {postMortem?.confidence && (
+                  <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: 'var(--accent-bg)', color: 'var(--accent)', border: '1px solid var(--accent-border)' }}>
+                    {postMortem.confidence}
+                  </span>
+                )}
+                {isRunning && (
+                  <span className="spin" style={{ display: 'inline-block', fontSize: 11, color: 'var(--warning)' }}>⟳</span>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Content area */}
+          <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+            {mainView === 'report' ? (
+              <PostMortem data={postMortem} />
+            ) : (
+              incident ? (
+                <InputPanel
+                  incident={incident}
+                  activeTab={evidenceTab}
+                  hideTabs
+                  projectId={currentProject?.id}
+                  onLogsChange={(logs) => setIncident(prev => prev ? { ...prev, logs } : prev)}
+                  onDiffChange={(deployDiff) => setIncident(prev => prev ? { ...prev, deployDiff } : prev)}
+                  onBranchSelect={async (branch) => {
+                    const proj = currentProject
+                    if (!proj) return
+                    const params = new URLSearchParams({ repo: proj.githubRepo, base: proj.githubBase || 'main', head: branch })
+                    const r = await fetch(`/api/diff/github?${params}`)
+                    if (r.ok) {
+                      const d = await r.json() as { text?: string }
+                      if (d.text) setIncident(prev => prev ? { ...prev, deployDiff: d.text! } : prev)
+                    }
+                    await fetch(`/api/projects/${proj.id}`, {
+                      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ lastBranch: branch }),
+                    })
+                    setCurrentProject(prev => prev ? { ...prev, lastBranch: branch } : prev)
+                  }}
+                />
+              ) : (
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, opacity: 0.5 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--card)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 22, color: 'var(--text-dim)' }}>⬡</span>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 13, fontWeight: 600 }}>No data loaded</p>
+                    <p style={{ color: 'var(--text-dim)', fontSize: 11, marginTop: 4 }}>Select a service and click Load Live Data</p>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </main>
+
       </div>
     </div>
+
+    {showSettings && (
+      <SettingsPanel
+        onClose={() => setShowSettings(false)}
+        onSaved={() => {
+          setShowSettings(false)
+          fetch('/api/projects').then(r => r.json()).then((data: ProjectConfig[]) => setProjects(data)).catch(() => {})
+          fetch('/api/config')
+            .then(r => r.json())
+            .then((cfg: { serviceName?: string | null; lokiConfigured?: boolean; lokiHealthy?: boolean; openaiConfigured?: boolean }) => {
+              setAppConfig({
+                serviceName: cfg.serviceName ?? null,
+                lokiConfigured: !!cfg.lokiConfigured,
+                lokiHealthy: !!cfg.lokiHealthy,
+                openaiConfigured: !!cfg.openaiConfigured,
+              })
+              if (cfg.lokiHealthy) loadLiveData()
+            })
+            .catch(() => {})
+        }}
+      />
+    )}
+    {showIntegrations && (
+      <IntegrationsPanel
+        onClose={() => setShowIntegrations(false)}
+        onSaved={() => {
+          setShowIntegrations(false)
+          fetch('/api/projects').then(r => r.json()).then((data: ProjectConfig[]) => setProjects(data)).catch(() => {})
+          fetch('/api/config').then(r => r.json()).then((cfg: { serviceName?: string | null; lokiConfigured?: boolean; lokiHealthy?: boolean; openaiConfigured?: boolean }) => {
+            setAppConfig({
+              serviceName: cfg.serviceName ?? null,
+              lokiConfigured: !!cfg.lokiConfigured,
+              lokiHealthy: !!cfg.lokiHealthy,
+              openaiConfigured: !!cfg.openaiConfigured,
+            })
+          }).catch(() => {})
+        }}
+      />
+    )}
+    </>
   )
 }

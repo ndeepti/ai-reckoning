@@ -14,6 +14,9 @@ export interface LiveTeamsMessage {
   receivedAt: number     // epoch ms
 }
 
+// StoredMessage allows an optional pre-assigned id (used by Graph API polling for dedup)
+export type StoredMessage = Omit<LiveTeamsMessage, 'id'> & { id?: string }
+
 const MAX = 200
 const PERSIST_PATH = '/tmp/teams-messages.json'
 
@@ -30,11 +33,11 @@ function saveToDisk(msgs: LiveTeamsMessage[]) {
 const store: LiveTeamsMessage[] = loadFromDisk()
 const subscribers = new Set<(msg: LiveTeamsMessage) => void>()
 
-export function pushMessage(msg: Omit<LiveTeamsMessage, 'id' | 'receivedAt'>) {
+export function pushMessage(msg: Omit<LiveTeamsMessage, 'id' | 'receivedAt'> & { id?: string; receivedAt?: number }) {
   const full: LiveTeamsMessage = {
     ...msg,
-    id: crypto.randomUUID(),
-    receivedAt: Date.now(),
+    id: msg.id ?? crypto.randomUUID(),
+    receivedAt: msg.receivedAt ?? Date.now(),
   }
   store.unshift(full)
   if (store.length > MAX) store.pop()
@@ -45,6 +48,10 @@ export function pushMessage(msg: Omit<LiveTeamsMessage, 'id' | 'receivedAt'>) {
 
 export function getMessages(channel?: string): LiveTeamsMessage[] {
   return channel ? store.filter((m) => m.channel === channel) : [...store]
+}
+
+export function getAllMessages(): LiveTeamsMessage[] {
+  return store.slice()
 }
 
 export function subscribe(fn: (msg: LiveTeamsMessage) => void) {

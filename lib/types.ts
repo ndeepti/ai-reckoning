@@ -35,6 +35,14 @@ export interface TeamsMessage {
   channel?: string
 }
 
+export interface JenkinsBuild {
+  buildNumber: number
+  date: string
+  result: string | null
+  changeCount: number
+  text: string
+}
+
 export interface MockIncident {
   title: string
   version: string
@@ -42,6 +50,21 @@ export interface MockIncident {
   metrics: MetricPoint[]
   teamsThread: TeamsMessage[]
   deployDiff: string
+  jenkinsBuild?: JenkinsBuild
+}
+
+export interface ProjectConfig {
+  id: string
+  name: string
+  services: string[]
+  channels: string[]
+  branchFilter: string[]
+  lokiQuery: string
+  lokiUrl?: string
+  jenkinsJob: string
+  githubRepo: string
+  githubBase: string
+  lastBranch?: string
 }
 
 export type DataSource = 'mock' | 'live'

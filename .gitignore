@@ -41,7 +41,6 @@ yarn-error.log*
 next-env.d.ts
 
 # Claude / AI config
-CLAUDE.md
 AGENTS.md
 
 # Office temp files
@@ -49,3 +48,6 @@ AGENTS.md
 
 # Local demo scripts
 scripts/demo-check.sh
+
+# User settings (written by /api/config POST — contains local env overrides)
+config.json
